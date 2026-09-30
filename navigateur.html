@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contrôle documentaire local | RAJA Next</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      .file-field {
+        width: 100%;
+      }
+      .local-note {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 8px 0 0;
+      }
+      @media print {
+        .local-note {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="identity">
+          <img
+            class="brand-logo"
+            src="./Raja-removebg-preview.png"
+            alt="RAJA"
+          />
+          <span>RAJA NEXT <small>Documentation</small></span>
+        </div>
+        <span class="local-status"
+          ><span aria-hidden="true"></span> Analyse dans le navigateur</span
+        >
+      </div>
+    </header>
+    <main>
+      <div class="page-heading">
+        <p class="eyebrow">Revue documentaire / espace de travail</p>
+        <h1>Contrôle de conformité</h1>
+      </div>
+      <form id="audit-form" class="import-bar">
+        <div class="file-field">
+          <div class="field-label">
+            <label for="page-file"
+              >Page Confluence <span class="required">HTML</span></label
+            >
+            <button
+              type="button"
+              class="help-trigger"
+              aria-label="Comment obtenir le fichier HTML d'une page Confluence ?"
+              aria-haspopup="dialog"
+              title="Où trouver cette information ?"
+            >
+              ?
+            </button>
+          </div>
+          <input
+            id="page-file"
+            type="file"
+            accept=".html,.htm,text/html"
+            required
+          />
+          <span id="file-name" class="filename">Aucun fichier sélectionné</span>
+          <p class="local-note">
+            Le fichier reste sur votre appareil. Aucune connexion à Confluence
+            ni aucun jeton requis.
+          </p>
+        </div>
+        <button id="audit-button" class="primary-button" type="submit">
+          Analyser la page
+        </button>
+      </form>
+      <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
+        <button
+          type="button"
+          class="help-close"
+          aria-label="Fermer l'aide"
+          title="Fermer"
+          autofocus
+        >
+          ×
+        </button>
+        <h2 id="help-title">Comment obtenir le fichier HTML ?</h2>
+        <p>
+          Pour obtenir le fichier HTML de la page Confluence que vous souhaitez importer :
+            </br>1️⃣ Ouvrez uniquement la page Confluence à analyser
+          </br>2️⃣ Attendez son chargement
+        </br>3️⃣ Puis faites <strong>Ctrl+S</strong>
+      </br>4️⃣ Et choisissez <strong>« Page Web HTML uniquement »</strong>.
+        </p>
+      </dialog>
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+      <section
+        id="report"
+        class="report"
+        aria-label="Rapport de conformité"
+        hidden
+      >
+        <div class="report-heading">
+          <div>
+            <p class="eyebrow">Rapport de conformité</p>
+            <h2 id="report-name"></h2>
+            <p id="report-date" class="muted"></p>
+          </div>
+          <div class="report-actions">
+            <button
+              id="download-txt"
+              type="button"
+              title="Télécharger le rapport au format texte"
+            >
+              Télécharger TXT
+            </button>
+            <button
+              id="download-pdf"
+              type="button"
+              title="Ouvrir l'impression pour enregistrer en PDF"
+            >
+              Enregistrer en PDF
+            </button>
+          </div>
+        </div>
+        <div class="summary" aria-label="Bilan des contrôles">
+          <div class="metric metric-fail">
+            <strong id="count-fail">0</strong><span>À corriger</span>
+          </div>
+          <div class="metric metric-verify">
+            <strong id="count-verify">0</strong><span>À vérifier</span>
+          </div>
+          <div class="metric metric-pass">
+            <strong id="count-pass">0</strong><span>Détectés</span>
+          </div>
+          <div class="metric metric-na">
+            <strong id="count-na">0</strong><span>Non applicables</span>
+          </div>
+        </div>
+        <p class="report-caution">
+          Un contrôle automatique ne valide ni l'exactitude métier ni l'état
+          Review dans Comala.
+        </p>
+        <div class="list-heading">
+          <h3>Points de contrôle</h3>
+          <div class="filters" role="group" aria-label="Filtrer les résultats">
+            <button
+              type="button"
+              data-filter="all"
+              class="selected"
+              aria-pressed="true"
+            >
+              Tous
+            </button>
+            <button type="button" data-filter="FAIL" aria-pressed="false">
+              À corriger
+            </button>
+            <button type="button" data-filter="VERIFY" aria-pressed="false">
+              À vérifier
+            </button>
+            <button type="button" data-filter="PASS" aria-pressed="false">
+              Détectés
+            </button>
+            <button type="button" data-filter="NA" aria-pressed="false">
+              Non applicables
+            </button>
+          </div>
+        </div>
+        <div id="findings" class="findings"></div>
+      </section>
+    </main>
+    <footer>
+      RAJA NEXT · Analyse locale d'un fichier HTML · Developpé par
+      <a
+        href="https://www.linkedin.com/in/rami-regaieg-555475166/"
+        target="_blank"
+        >Rami REGAIEG</a
+      >
+    </footer>
+    <script>
+      const form = document.querySelector("#audit-form");
+      const fileInput = document.querySelector("#page-file");
+      const message = document.querySelector("#message");
+      const reportSection = document.querySelector("#report");
+      const findings = document.querySelector("#findings");
+      let currentReport = null;
+      let reportDate = null;
+      let currentName = "";
+
+      fileInput.addEventListener("change", () => {
+        document.querySelector("#file-name").textContent =
+          fileInput.files[0]?.name || "Aucun fichier sélectionné";
+        message.textContent = "";
+      });
+      const helpDialog = document.querySelector("#help-dialog");
+      document
+        .querySelector(".help-trigger")
+        .addEventListener("click", () => helpDialog.showModal());
+      helpDialog
+        .querySelector(".help-close")
+        .addEventListener("click", () => helpDialog.close());
+
+      function analyze(source) {
+        const template = document.createElement("template");
+        template.innerHTML = source;
+        const root =
+          template.content.querySelector("#main-content") ||
+          template.content.querySelector("#content") ||
+          template.content;
+        const textRoot = root.cloneNode(true);
+        for (const element of textRoot.querySelectorAll(
+          "head, title, script, style, template",
+        ))
+          element.remove();
+        for (const element of textRoot.querySelectorAll(
+          "p, div, h1, h2, h3, h4, h5, h6, li, td, th, br, section, article",
+        )) {
+          element.before(document.createTextNode(" "));
+        }
+        const text = textRoot.textContent || "";
+        const elements = [...root.querySelectorAll("*")];
+        const headings = [
+          ...root.querySelectorAll("h1, h2, h3, h4, h5, h6"),
+        ].map((heading) => heading.textContent.trim());
+        const checks = [];
+        const add = (rule, status, detail) =>
+          checks.push({ rule, status, detail });
+        const macro = (element) =>
+          element.getAttribute("data-macro-name") ||
+          element.getAttribute("ac:name") ||
+          "";
+        const hasClass = (element, name) => element.classList.contains(name);
+        const tocFound = elements.some(
+          (element) =>
+            /^(toc|table-of-contents)$/i.test(macro(element)) ||
+            hasClass(element, "toc-macro"),
+        );
+        const revisionPanel = elements.some(
+          (element) =>
+            (/^(tip|success)$/i.test(macro(element)) ||
+              /confluence-information-macro-success|aui-message-success/.test(
+                element.className || "",
+              ) ||
+              element.getAttribute("data-panel-type") === "success") &&
+            /last (revision|update)/i.test(element.textContent),
+        );
+
+        add(
+          "Table of contents macro",
+          tocFound ? "PASS" : "VERIFY",
+          tocFound
+            ? "Macro detected in the export."
+            : "Not detectable in this export; check the Confluence source page.",
+        );
+        add(
+          "Introduction",
+          headings.some((heading) =>
+            /\b(introduction|context|description)\b/i.test(heading),
+          )
+            ? "PASS"
+            : "FAIL",
+          headings.some((heading) =>
+            /\b(introduction|context|description)\b/i.test(heading),
+          )
+            ? "Introduction, Context or Description heading found."
+            : "Add an Introduction, Context or Description heading describing the purpose.",
+        );
+        const sections = headings.filter(
+          (heading) =>
+            !/^(introduction|context|description|acronyms|abbreviations)$/i.test(
+              heading,
+            ),
+        );
+        const numberedContents = elements.filter(
+          (element) =>
+            hasClass(element, "toc-item-body") &&
+            /^\d+(\.\d+)*$/.test(element.getAttribute("data-outline") || ""),
+        ).length;
+        if (
+          sections.length >= 2 &&
+          !sections.some((heading) => /^\s*\d+[.)]\s+/.test(heading)) &&
+          (!tocFound || numberedContents < 2)
+        ) {
+          add("Numbered chapters", "FAIL", "Number the chapter headings.");
+        } else if (sections.length < 2) {
+          add(
+            "Numbered chapters",
+            "VERIFY",
+            "Too few chapter headings to assess numbering.",
+          );
+        } else if (numberedContents >= 2) {
+          add(
+            "Numbered chapters",
+            "PASS",
+            "Numbered chapter entries found in the table of contents.",
+          );
+        } else {
+          add("Numbered chapters", "PASS", "Numbered chapter headings found.");
+        }
+        add(
+          "Functional formulation",
+          /\bAs a\b[\s\S]{1,300}\bI want\b[\s\S]{1,300}\bSo that\b/i.test(
+            text,
+          ) || /\bGiven\b[\s\S]{1,300}\bWhen\b[\s\S]{1,300}\bThen\b/i.test(text)
+            ? "PASS"
+            : "FAIL",
+          /\bAs a\b[\s\S]{1,300}\bI want\b[\s\S]{1,300}\bSo that\b/i.test(
+            text,
+          ) || /\bGiven\b[\s\S]{1,300}\bWhen\b[\s\S]{1,300}\bThen\b/i.test(text)
+            ? "User story or Given/When/Then sequence found."
+            : "Add a user story or Given/When/Then formulation.",
+        );
+        const revisionLabel =
+          /\bLast (revision|update(?: of this page)?)\s*:/i.test(text);
+        add(
+          "Last revision panel",
+          revisionLabel ? (revisionPanel ? "PASS" : "VERIFY") : "FAIL",
+          revisionLabel
+            ? revisionPanel
+              ? "Revision date label found inside a success panel."
+              : "Date label found; confirm its Confluence panel type in the source."
+            : "Add a last revision date in the prescribed success panel.",
+        );
+        const dateMatch = text.match(
+          /\bLast (?:revision|update(?: of this page)?)\s*:\s*([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s*\d{4})/i,
+        );
+        const parsedDate =
+          dateMatch &&
+          new Date(dateMatch[1].replace(/(\d)(st|nd|rd|th)(?=,)/i, "$1"));
+        if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+          const cutoff = new Date(
+            parsedDate.getFullYear() + 1,
+            parsedDate.getMonth(),
+            parsedDate.getDate(),
+          );
+          const today = new Date();
+          const dateText = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
+          add(
+            "Annual revision",
+            cutoff <
+              new Date(today.getFullYear(), today.getMonth(), today.getDate())
+              ? "FAIL"
+              : "PASS",
+            cutoff <
+              new Date(today.getFullYear(), today.getMonth(), today.getDate())
+              ? `Last revision ${dateText} is over one year old.`
+              : `Last revision: ${dateText}.`,
+          );
+        } else {
+          add(
+            "Annual revision",
+            "VERIFY",
+            "Revision date could not be parsed; check it on the source page.",
+          );
+        }
+        const images = elements.filter(
+          (element) =>
+            element.tagName === "IMG" ||
+            /^(ac:)?image$/i.test(element.localName),
+        ).length;
+        add(
+          "Back Office screenshots",
+          /\b(back office|configuration|configure|setting)\b/i.test(text) &&
+            !images
+            ? "FAIL"
+            : "VERIFY",
+          /\b(back office|configuration|configure|setting)\b/i.test(text) &&
+            !images
+            ? "Configuration is discussed but no images were found in the export."
+            : `Found ${images} image(s); check relevance, legibility, and step annotations.`,
+        );
+
+        const inContents = (element) => {
+          for (
+            let ancestor = element;
+            ancestor && ancestor !== root;
+            ancestor = ancestor.parentElement
+          ) {
+            if (
+              hasClass(ancestor, "toc-macro") ||
+              hasClass(ancestor, "toc-item-body") ||
+              macro(ancestor) === "toc"
+            )
+              return true;
+          }
+          return false;
+        };
+        const frenchMarkers = new Set(
+          "le la les des une pour dans avec sur vous nous est sont du au aux et puis ensuite cliquez sélectionnez choisissez ajoutez enregistrer enregistrez paramètres étape lorsque afficher modifier supprimer afin depuis votre cette ceci doit être".split(
+            " ",
+          ),
+        );
+        const englishMarkers = new Set(
+          "the and you your with from for this that then when click select choose add save display edit delete in to is are can will step settings page on".split(
+            " ",
+          ),
+        );
+        const frenchImperatives = new Set(
+          "cliquez sélectionnez choisissez ajoutez enregistrez supprimez modifiez".split(
+            " ",
+          ),
+        );
+        const frenchPassages = [];
+        for (const element of elements) {
+          if (
+            !/^(P|H[1-6]|LI|TD|TH)$/.test(element.tagName) ||
+            inContents(element)
+          )
+            continue;
+          if (
+            /^(LI|TD|TH)$/.test(element.tagName) &&
+            element.querySelector("p")
+          )
+            continue;
+          if (element.tagName === "LI" && element.querySelector("li")) continue;
+          const passage = element.textContent.replace(/\s+/g, " ").trim();
+          if (!passage || /^Ouvrir image-\S+$/.test(passage)) continue;
+          for (const sentence of passage.split(/[.!?;]+/)) {
+            const words = sentence.toLowerCase().match(/\p{L}+/gu) || [];
+            if (words.length < 2) continue;
+            const frenchCount = words.filter((word) =>
+              frenchMarkers.has(word),
+            ).length;
+            const englishCount = words.filter((word) =>
+              englishMarkers.has(word),
+            ).length;
+            const imperative = words.some((word) =>
+              frenchImperatives.has(word),
+            );
+            if (
+              (frenchCount >= 2 && frenchCount > englishCount) ||
+              (imperative && frenchCount && !englishCount)
+            ) {
+              frenchPassages.push(
+                sentence.trim().slice(0, 130) +
+                  (sentence.trim().length > 130 ? "..." : ""),
+              );
+              if (frenchPassages.length >= 3) break;
+            }
+          }
+          if (frenchPassages.length >= 3) break;
+        }
+        add(
+          "English only",
+          frenchPassages.length ? "FAIL" : "VERIFY",
+          frenchPassages.length
+            ? `Likely French prose: "${frenchPassages.join('"; "')}". Translate these passages into English.`
+            : "No French prose detected in headings, paragraphs or list items; review ambiguous text and screenshots manually.",
+        );
+
+        const acronyms = [...new Set(text.match(/\b[A-Z]{2,6}\b/g) || [])]
+          .filter(
+            (word) =>
+              !["RAJA", "URL", "HTTP", "HTTPS", "HTML", "PDF"].includes(word),
+          )
+          .sort();
+        add(
+          "Acronym definitions",
+          "VERIFY",
+          acronyms.length
+            ? `Found ${acronyms.length} candidate acronym(s): ${acronyms.join(", ")}. Confirm each is defined in an acronym table; UI names and brand names may be exceptions.`
+            : "No candidate acronyms found; confirm abbreviations and their definitions on the source page.",
+        );
+        const links = [...root.querySelectorAll("a[href]")].filter((link) =>
+          link.getAttribute("href"),
+        );
+        const bodyLinks = links.filter((link) => !inContents(link));
+        const confluenceLinks = bodyLinks.filter((link) =>
+          /raja-group\.atlassian\.net|^\/wiki\//i.test(
+            link.getAttribute("href"),
+          ),
+        ).length;
+        const tocLinks = links.length - bodyLinks.length;
+        add(
+          "Links",
+          "VERIFY",
+          bodyLinks.length
+            ? `Found ${bodyLinks.length} authored link(s), including ${confluenceLinks} Confluence link(s); ignored ${tocLinks} generated TOC link(s). Verify each destination and access in Confluence.`
+            : `No authored links found; ignored ${tocLinks} generated TOC link(s). Check whether related procedures need a link rather than repeated instructions.`,
+        );
+        add(
+          "Search labels",
+          "VERIFY",
+          "Labels are page metadata, not part of the document body. Inspect the labels on the live Confluence page.",
+        );
+        add(
+          "Screenshot action numbering",
+          "VERIFY",
+          images
+            ? `Found ${images} image(s). Inspect legibility and action numbers on the images; the text export cannot read pixels.`
+            : "No images detected; decide whether the described workflow needs screenshots.",
+        );
+        add(
+          "Correct section in the page tree",
+          "VERIFY",
+          "Page content does not establish its Confluence parent. Compare the live page location to the matching functional chapter.",
+        );
+        add(
+          "Functional accuracy and feature-change review",
+          "VERIFY",
+          /\b(back office|configuration|configure|setting)\b/i.test(text)
+            ? "Configuration steps are described. Have a product owner verify them in the current Back Office and after each feature change."
+            : "Confirm the described webshop behavior against the current product and review after feature changes.",
+        );
+        const codeBlocks = elements.filter(
+          (element) => element.tagName === "PRE" || macro(element) === "code",
+        ).length;
+        const technicalTerms = [
+          ...new Set(
+            (text.match(/\b(API|CSS|SQL|JSON|script|cron)\b/gi) || []).map(
+              (word) => word.toUpperCase(),
+            ),
+          ),
+        ].sort();
+        add(
+          "Non-technical clarity and English prose",
+          "VERIFY",
+          `Found ${codeBlocks} code block(s) and ${technicalTerms.length} technical term(s)${technicalTerms.length ? ": " + technicalTerms.join(", ") : ""}. Confirm non-technical readers can follow each step and that the prose is English.`,
+        );
+        const troubleshooting = (
+          text.match(
+            /\b(error|warning|issue|fail(?:ure|ed)?|mistake|troubleshoot|avoid|risk|if you forget)\b/gi,
+          ) || []
+        ).length;
+        add(
+          "Common errors and solutions",
+          /\b(back office|configuration|configure|import|setting)\b/i.test(text)
+            ? "VERIFY"
+            : "NA",
+          /\b(back office|configuration|configure|import|setting)\b/i.test(text)
+            ? `Found ${troubleshooting} possible error/risk reference(s) in a configuration or import page. Check that common failures have prevention or recovery steps.`
+            : "No configuration or import workflow detected; revisit if the page covers one.",
+        );
+        const exampleCount = (
+          text.match(/\b(example|for instance|such as|e\.g\.)\b/gi) || []
+        ).length;
+        add(
+          "Concrete webshop examples",
+          "VERIFY",
+          `Found ${exampleCount} explicit example marker(s). Check that at least one example shows a concrete webshop outcome rather than only a setting name.`,
+        );
+        const repeated = [
+          ...new Set(
+            headings.filter(
+              (heading, index) => headings.indexOf(heading) !== index,
+            ),
+          ),
+        ];
+        add(
+          "No duplicated procedures",
+          "VERIFY",
+          repeated.length
+            ? `Repeated heading(s): ${repeated.join(", ")}. Check repeated steps here and in linked pages.`
+            : "No repeated headings found in this page. Compare procedure steps with existing Confluence pages before duplicating them.",
+        );
+        const relatedOperations = (
+          text.match(
+            /\b(translation keys?|job import|import job|indexation)\b/gi,
+          ) || []
+        ).length;
+        add(
+          "Links to related configuration and translation keys",
+          relatedOperations ? "VERIFY" : "NA",
+          relatedOperations
+            ? `Found ${relatedOperations} reference(s) to annex operations and ${bodyLinks.length} authored link(s). Check that reusable procedures are linked, not rewritten.`
+            : "No translation key, import job or indexing operation mentioned; revisit if the workflow depends on one.",
+        );
+        const emphasis = elements.filter((element) =>
+          /^(B|STRONG|I|EM|U)$/.test(element.tagName),
+        ).length;
+        add(
+          "Black text and appropriate emphasis",
+          "VERIFY",
+          `Found ${emphasis} bold/italic/underlined element(s). Check parameter names, emphasis and any non-black text in the live page; exported themes may override colors.`,
+        );
+        const panels = elements.filter(
+          (element) =>
+            /^(info|note|tip|warning|panel)$/.test(macro(element)) ||
+            /^(info|note|success|warning|error)$/.test(
+              element.getAttribute("data-panel-type") || "",
+            ) ||
+            /confluence-information-macro-(info|note|success|warning|tip)/.test(
+              element.className || "",
+            ),
+        ).length;
+        add(
+          "Appropriate information and warning panels",
+          "VERIFY",
+          `Found ${panels} panel-like element(s). Review whether help, examples, revision dates and risks use the prescribed panel types.`,
+        );
+        return {
+          checks,
+          note: "Analyse locale d'un export HTML ; VERIFY ne signifie pas non conforme.",
+        };
+      }
+
+      function setFilter(filter) {
+        for (const button of document.querySelectorAll("[data-filter]")) {
+          const selected = button.dataset.filter === filter;
+          button.classList.toggle("selected", selected);
+          button.setAttribute("aria-pressed", String(selected));
+        }
+        for (const row of findings.children)
+          row.hidden = filter !== "all" && row.dataset.status !== filter;
+      }
+      for (const button of document.querySelectorAll("[data-filter]")) {
+        button.addEventListener("click", () =>
+          setFilter(button.dataset.filter),
+        );
+      }
+
+      function showReport(report, filename) {
+        currentReport = report;
+        currentName = filename;
+        reportDate = new Date();
+        document.querySelector("#report-name").textContent = filename;
+        document.querySelector("#report-date").textContent =
+          reportDate.toLocaleString("fr-FR");
+        const counts = { FAIL: 0, VERIFY: 0, PASS: 0, NA: 0 };
+        findings.replaceChildren();
+        for (const check of report.checks) {
+          counts[check.status]++;
+          const row = document.createElement("article");
+          row.className = "finding";
+          row.dataset.status = check.status;
+          const badge = document.createElement("span");
+          badge.className = `badge badge-${check.status.toLowerCase()}`;
+          badge.textContent = {
+            FAIL: "À corriger",
+            VERIFY: "À vérifier",
+            PASS: "Détecté",
+            NA: "Non applicable",
+          }[check.status];
+          const content = document.createElement("div");
+          const title = document.createElement("h4");
+          title.textContent = check.rule;
+          const detail = document.createElement("p");
+          detail.textContent = check.detail;
+          content.append(title, detail);
+          row.append(badge, content);
+          findings.append(row);
+        }
+        for (const status of Object.keys(counts)) {
+          document.querySelector(`#count-${status.toLowerCase()}`).textContent =
+            counts[status];
+        }
+        setFilter("all");
+        reportSection.hidden = false;
+        message.dataset.state = "success";
+        message.textContent = "Analyse terminée.";
+        reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = fileInput.files[0];
+        if (!file) return;
+        if (!/\.html?$/i.test(file.name)) {
+          message.textContent = "Sélectionnez un export HTML (.html ou .htm).";
+          return;
+        }
+        if (!file.size || file.size > 12 * 1024 * 1024) {
+          message.textContent = "Le fichier doit contenir moins de 12 Mo.";
+          return;
+        }
+        const button = document.querySelector("#audit-button");
+        button.disabled = true;
+        message.textContent = "";
+        try {
+          showReport(analyze(await file.text()), file.name);
+        } catch (error) {
+          message.dataset.state = "error";
+          message.textContent = `Analyse impossible : ${error.message}`;
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      document.querySelector("#download-txt").addEventListener("click", () => {
+        if (!currentReport) return;
+        const lines = [
+          `RAPPORT DE CONFORMITÉ — ${currentName}`,
+          `Généré le ${reportDate.toLocaleString("fr-FR")}`,
+          "État Comala : non vérifié",
+          "Un résultat positif ne vaut pas approbation documentaire.",
+          "",
+          ...currentReport.checks.map(
+            (check) => `[${check.status}] ${check.rule}\n${check.detail}\n`,
+          ),
+        ];
+        const url = URL.createObjectURL(
+          new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }),
+        );
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${currentName.replace(/\.html?$/i, "").replace(/[\\/:*?"<>|]/g, "-")}-rapport.txt`;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+      document.querySelector("#download-pdf").addEventListener("click", () => {
+        if (!currentReport) return;
+        setFilter("all");
+        window.print();
+      });
+    </script>
+  </body>
+</html>
