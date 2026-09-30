@@ -1,6 +1,6 @@
 # Controle documentaire RAJA NEXT - version navigateur
 
-Analyse un export HTML d'une page Confluence directement dans le navigateur, sans serveur, sans jeton Atlassian et sans connexion a Confluence. La page d'entree est [navigateur.html](navigateur.html).
+Analyse un export HTML d'une page Confluence directement dans le navigateur, sans serveur, sans jeton Atlassian et sans connexion a Confluence. La page d'entree est [index.html](index.html).
 
 ## Utilisation
 
