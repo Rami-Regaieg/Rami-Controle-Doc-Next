@@ -14,6 +14,25 @@
         font-size: 14px;
         margin: 8px 0 0;
       }
+      #message:empty {
+        display: none;
+      }
+      #message[data-state="info"],
+      #message[data-state="success"] {
+        padding: 12px 16px;
+        border-left: 4px solid var(--brand);
+        background: var(--brand-light);
+        color: var(--ink);
+        font-weight: 700;
+      }
+      #message[data-state="success"] {
+        border-color: #238355;
+        background: #e9f5ee;
+        color: #185c3c;
+      }
+      #message[data-state="success"]::before {
+        content: "✓ ";
+      }
       @media print {
         .local-note {
           display: none !important;
@@ -188,9 +207,15 @@
       let currentName = "";
 
       fileInput.addEventListener("change", () => {
+        const filename = fileInput.files[0]?.name;
         document.querySelector("#file-name").textContent =
-          fileInput.files[0]?.name || "Aucun fichier sélectionné";
-        message.textContent = "";
+          filename || "Aucun fichier sélectionné";
+        message.dataset.state = "info";
+        message.textContent = filename
+          ? `Fichier « ${filename} » sélectionné. Lancez l'analyse.`
+          : "";
+        reportSection.hidden = true;
+        currentReport = null;
       });
       const helpDialog = document.querySelector("#help-dialog");
       document
@@ -246,11 +271,11 @@
         );
 
         add(
-          "Table of contents macro",
+          "Macro de sommaire",
           tocFound ? "PASS" : "VERIFY",
           tocFound
-            ? "Macro detected in the export."
-            : "Not detectable in this export; check the Confluence source page.",
+            ? "Macro détectée dans l'export."
+            : "Macro non détectable dans cet export ; vérifiez la page source Confluence.",
         );
         add(
           "Introduction",
@@ -262,8 +287,8 @@
           headings.some((heading) =>
             /\b(introduction|context|description)\b/i.test(heading),
           )
-            ? "Introduction, Context or Description heading found."
-            : "Add an Introduction, Context or Description heading describing the purpose.",
+            ? "Titre Introduction, Context ou Description détecté."
+            : "Ajoutez un titre Introduction, Context ou Description qui présente l'objectif de la page.",
         );
         const sections = headings.filter(
           (heading) =>
@@ -281,24 +306,24 @@
           !sections.some((heading) => /^\s*\d+[.)]\s+/.test(heading)) &&
           (!tocFound || numberedContents < 2)
         ) {
-          add("Numbered chapters", "FAIL", "Number the chapter headings.");
+          add("Chapitres numérotés", "FAIL", "Numérotez les titres des chapitres.");
         } else if (sections.length < 2) {
           add(
-            "Numbered chapters",
+            "Chapitres numérotés",
             "VERIFY",
-            "Too few chapter headings to assess numbering.",
+            "Trop peu de chapitres pour évaluer la numérotation.",
           );
         } else if (numberedContents >= 2) {
           add(
-            "Numbered chapters",
+            "Chapitres numérotés",
             "PASS",
-            "Numbered chapter entries found in the table of contents.",
+            "Entrées de chapitres numérotées détectées dans le sommaire.",
           );
         } else {
-          add("Numbered chapters", "PASS", "Numbered chapter headings found.");
+          add("Chapitres numérotés", "PASS", "Titres de chapitres numérotés détectés.");
         }
         add(
-          "Functional formulation",
+          "Formulation fonctionnelle",
           /\bAs a\b[\s\S]{1,300}\bI want\b[\s\S]{1,300}\bSo that\b/i.test(
             text,
           ) || /\bGiven\b[\s\S]{1,300}\bWhen\b[\s\S]{1,300}\bThen\b/i.test(text)
@@ -307,19 +332,19 @@
           /\bAs a\b[\s\S]{1,300}\bI want\b[\s\S]{1,300}\bSo that\b/i.test(
             text,
           ) || /\bGiven\b[\s\S]{1,300}\bWhen\b[\s\S]{1,300}\bThen\b/i.test(text)
-            ? "User story or Given/When/Then sequence found."
-            : "Add a user story or Given/When/Then formulation.",
+            ? "User story ou séquence Given/When/Then détectée."
+            : "Ajoutez une user story ou une formulation Given/When/Then.",
         );
         const revisionLabel =
           /\bLast (revision|update(?: of this page)?)\s*:/i.test(text);
         add(
-          "Last revision panel",
+          "Volet de dernière révision",
           revisionLabel ? (revisionPanel ? "PASS" : "VERIFY") : "FAIL",
           revisionLabel
             ? revisionPanel
-              ? "Revision date label found inside a success panel."
-              : "Date label found; confirm its Confluence panel type in the source."
-            : "Add a last revision date in the prescribed success panel.",
+              ? "Libellé de révision détecté dans un volet de type succès."
+              : "Libellé de révision détecté ; confirmez le type du volet sur la page source."
+            : "Ajoutez la date de dernière révision dans le volet de type succès prévu.",
         );
         const dateMatch = text.match(
           /\bLast (?:revision|update(?: of this page)?)\s*:\s*([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s*\d{4})/i,
@@ -336,21 +361,21 @@
           const today = new Date();
           const dateText = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
           add(
-            "Annual revision",
+            "Révision annuelle",
             cutoff <
               new Date(today.getFullYear(), today.getMonth(), today.getDate())
               ? "FAIL"
               : "PASS",
             cutoff <
               new Date(today.getFullYear(), today.getMonth(), today.getDate())
-              ? `Last revision ${dateText} is over one year old.`
-              : `Last revision: ${dateText}.`,
+              ? `La dernière révision (${dateText}) date de plus d'un an.`
+              : `Dernière révision : ${dateText}.`,
           );
         } else {
           add(
-            "Annual revision",
+            "Révision annuelle",
             "VERIFY",
-            "Revision date could not be parsed; check it on the source page.",
+            "Date de révision illisible ou absente ; vérifiez-la sur la page source.",
           );
         }
         const images = elements.filter(
@@ -359,15 +384,15 @@
             /^(ac:)?image$/i.test(element.localName),
         ).length;
         add(
-          "Back Office screenshots",
+          "Captures d'écran Back Office",
           /\b(back office|configuration|configure|setting)\b/i.test(text) &&
             !images
             ? "FAIL"
             : "VERIFY",
           /\b(back office|configuration|configure|setting)\b/i.test(text) &&
             !images
-            ? "Configuration is discussed but no images were found in the export."
-            : `Found ${images} image(s); check relevance, legibility, and step annotations.`,
+            ? "La configuration est décrite, mais aucune image n'a été détectée dans l'export."
+            : `${images} image(s) détectée(s) ; vérifiez leur pertinence, leur lisibilité et la numérotation des actions.`,
         );
 
         const inContents = (element) => {
@@ -441,11 +466,11 @@
           if (frenchPassages.length >= 3) break;
         }
         add(
-          "English only",
+          "Rédaction en anglais",
           frenchPassages.length ? "FAIL" : "VERIFY",
           frenchPassages.length
-            ? `Likely French prose: "${frenchPassages.join('"; "')}". Translate these passages into English.`
-            : "No French prose detected in headings, paragraphs or list items; review ambiguous text and screenshots manually.",
+            ? `Passages probablement en français : « ${frenchPassages.join(' » ; « ')} ». Traduisez-les en anglais.`
+            : "Aucun passage français détecté dans les titres, paragraphes ou listes ; relisez les passages ambigus et les captures manuellement.",
         );
 
         const acronyms = [...new Set(text.match(/\b[A-Z]{2,6}\b/g) || [])]
@@ -455,11 +480,11 @@
           )
           .sort();
         add(
-          "Acronym definitions",
+          "Définition des acronymes",
           "VERIFY",
           acronyms.length
-            ? `Found ${acronyms.length} candidate acronym(s): ${acronyms.join(", ")}. Confirm each is defined in an acronym table; UI names and brand names may be exceptions.`
-            : "No candidate acronyms found; confirm abbreviations and their definitions on the source page.",
+            ? `${acronyms.length} acronyme(s) potentiel(s) : ${acronyms.join(", ")}. Vérifiez leur définition dans un tableau ; les noms d'interface et de marques peuvent faire exception.`
+            : "Aucun acronyme potentiel détecté ; vérifiez les abréviations et leurs définitions sur la page source.",
         );
         const links = [...root.querySelectorAll("a[href]")].filter((link) =>
           link.getAttribute("href"),
@@ -472,35 +497,35 @@
         ).length;
         const tocLinks = links.length - bodyLinks.length;
         add(
-          "Links",
+          "Liens",
           "VERIFY",
           bodyLinks.length
-            ? `Found ${bodyLinks.length} authored link(s), including ${confluenceLinks} Confluence link(s); ignored ${tocLinks} generated TOC link(s). Verify each destination and access in Confluence.`
-            : `No authored links found; ignored ${tocLinks} generated TOC link(s). Check whether related procedures need a link rather than repeated instructions.`,
+            ? `${bodyLinks.length} lien(s) rédigé(s), dont ${confluenceLinks} lien(s) Confluence ; ${tocLinks} lien(s) de sommaire automatique ignoré(s). Vérifiez les destinations et les droits d'accès dans Confluence.`
+            : `Aucun lien rédigé ; ${tocLinks} lien(s) de sommaire automatique ignoré(s). Vérifiez si les procédures connexes doivent être liées plutôt que répétées.`,
         );
         add(
-          "Search labels",
+          "Étiquettes de recherche",
           "VERIFY",
-          "Labels are page metadata, not part of the document body. Inspect the labels on the live Confluence page.",
+          "Les étiquettes sont des métadonnées absentes du corps du document. Vérifiez-les sur la page Confluence.",
         );
         add(
-          "Screenshot action numbering",
+          "Numérotation des actions sur les captures",
           "VERIFY",
           images
-            ? `Found ${images} image(s). Inspect legibility and action numbers on the images; the text export cannot read pixels.`
-            : "No images detected; decide whether the described workflow needs screenshots.",
+            ? `${images} image(s) détectée(s). Vérifiez leur lisibilité et la numérotation des actions ; l'analyse ne lit pas le contenu des images.`
+            : "Aucune image détectée ; vérifiez si la procédure décrite nécessite des captures.",
         );
         add(
-          "Correct section in the page tree",
+          "Emplacement dans l'arborescence",
           "VERIFY",
-          "Page content does not establish its Confluence parent. Compare the live page location to the matching functional chapter.",
+          "Le contenu ne permet pas de connaître la page parente. Comparez l'emplacement dans Confluence au chapitre fonctionnel correspondant.",
         );
         add(
-          "Functional accuracy and feature-change review",
+          "Exactitude fonctionnelle et évolution du produit",
           "VERIFY",
           /\b(back office|configuration|configure|setting)\b/i.test(text)
-            ? "Configuration steps are described. Have a product owner verify them in the current Back Office and after each feature change."
-            : "Confirm the described webshop behavior against the current product and review after feature changes.",
+            ? "Des étapes de configuration sont décrites. Faites-les vérifier dans le Back Office actuel par un responsable produit, puis après chaque évolution."
+            : "Confirmez le comportement décrit dans la version actuelle du site et revoyez-le après chaque évolution du produit.",
         );
         const codeBlocks = elements.filter(
           (element) => element.tagName === "PRE" || macro(element) === "code",
@@ -513,9 +538,9 @@
           ),
         ].sort();
         add(
-          "Non-technical clarity and English prose",
+          "Clarté pour les non-techniciens et anglais",
           "VERIFY",
-          `Found ${codeBlocks} code block(s) and ${technicalTerms.length} technical term(s)${technicalTerms.length ? ": " + technicalTerms.join(", ") : ""}. Confirm non-technical readers can follow each step and that the prose is English.`,
+          `${codeBlocks} bloc(s) de code et ${technicalTerms.length} terme(s) technique(s)${technicalTerms.length ? " : " + technicalTerms.join(", ") : ""}. Vérifiez que chaque étape reste compréhensible sans expertise technique et que le texte est en anglais.`,
         );
         const troubleshooting = (
           text.match(
@@ -523,21 +548,21 @@
           ) || []
         ).length;
         add(
-          "Common errors and solutions",
+          "Erreurs fréquentes et solutions",
           /\b(back office|configuration|configure|import|setting)\b/i.test(text)
             ? "VERIFY"
             : "NA",
           /\b(back office|configuration|configure|import|setting)\b/i.test(text)
-            ? `Found ${troubleshooting} possible error/risk reference(s) in a configuration or import page. Check that common failures have prevention or recovery steps.`
-            : "No configuration or import workflow detected; revisit if the page covers one.",
+            ? `${troubleshooting} mention(s) possible(s) d'erreur ou de risque. Vérifiez que les problèmes courants ont des étapes de prévention ou de résolution.`
+            : "Aucune procédure de configuration ou d'import détectée ; réévaluez ce point si la page en décrit une.",
         );
         const exampleCount = (
           text.match(/\b(example|for instance|such as|e\.g\.)\b/gi) || []
         ).length;
         add(
-          "Concrete webshop examples",
+          "Exemples concrets pour le site e-commerce",
           "VERIFY",
-          `Found ${exampleCount} explicit example marker(s). Check that at least one example shows a concrete webshop outcome rather than only a setting name.`,
+          `${exampleCount} mention(s) explicite(s) d'exemple. Vérifiez qu'au moins un exemple montre un résultat concret pour le site, pas seulement un nom de paramètre.`,
         );
         const repeated = [
           ...new Set(
@@ -547,11 +572,11 @@
           ),
         ];
         add(
-          "No duplicated procedures",
+          "Absence de procédures dupliquées",
           "VERIFY",
           repeated.length
-            ? `Repeated heading(s): ${repeated.join(", ")}. Check repeated steps here and in linked pages.`
-            : "No repeated headings found in this page. Compare procedure steps with existing Confluence pages before duplicating them.",
+            ? `Titres répétés : ${repeated.join(", ")}. Vérifiez si les étapes se répètent ici ou dans les pages liées.`
+            : "Aucun titre répété sur cette page. Comparez les étapes aux autres pages Confluence avant de les recopier.",
         );
         const relatedOperations = (
           text.match(
@@ -559,19 +584,19 @@
           ) || []
         ).length;
         add(
-          "Links to related configuration and translation keys",
+          "Liens vers les configurations et clés de traduction associées",
           relatedOperations ? "VERIFY" : "NA",
           relatedOperations
-            ? `Found ${relatedOperations} reference(s) to annex operations and ${bodyLinks.length} authored link(s). Check that reusable procedures are linked, not rewritten.`
-            : "No translation key, import job or indexing operation mentioned; revisit if the workflow depends on one.",
+            ? `${relatedOperations} mention(s) d'opérations associées et ${bodyLinks.length} lien(s) rédigé(s). Vérifiez que les procédures réutilisables sont liées, pas recopiées.`
+            : "Aucune clé de traduction, tâche d'import ou opération d'indexation mentionnée ; réévaluez ce point si la procédure en dépend.",
         );
         const emphasis = elements.filter((element) =>
           /^(B|STRONG|I|EM|U)$/.test(element.tagName),
         ).length;
         add(
-          "Black text and appropriate emphasis",
+          "Texte noir et mise en évidence adaptée",
           "VERIFY",
-          `Found ${emphasis} bold/italic/underlined element(s). Check parameter names, emphasis and any non-black text in the live page; exported themes may override colors.`,
+          `${emphasis} élément(s) en gras, italique ou souligné(s). Vérifiez les noms des paramètres, la mise en évidence et les textes non noirs sur la page source ; le thème de l'export peut modifier les couleurs.`,
         );
         const panels = elements.filter(
           (element) =>
@@ -584,13 +609,13 @@
             ),
         ).length;
         add(
-          "Appropriate information and warning panels",
+          "Volets d'information et d'avertissement adaptés",
           "VERIFY",
-          `Found ${panels} panel-like element(s). Review whether help, examples, revision dates and risks use the prescribed panel types.`,
+          `${panels} volet(s) potentiel(s) détecté(s). Vérifiez que l'aide, les exemples, les dates de révision et les risques utilisent les types de volets prévus.`,
         );
         return {
           checks,
-          note: "Analyse locale d'un export HTML ; VERIFY ne signifie pas non conforme.",
+          note: "Analyse locale d'un export HTML ; « À vérifier » ne signifie pas non conforme.",
         };
       }
 
@@ -647,7 +672,7 @@
         setFilter("all");
         reportSection.hidden = false;
         message.dataset.state = "success";
-        message.textContent = "Analyse terminée.";
+        message.textContent = `Fichier « ${filename} » analysé avec succès. Rapport disponible ci-dessous.`;
         reportSection.scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
@@ -656,10 +681,12 @@
         const file = fileInput.files[0];
         if (!file) return;
         if (!/\.html?$/i.test(file.name)) {
+          message.dataset.state = "error";
           message.textContent = "Sélectionnez un export HTML (.html ou .htm).";
           return;
         }
         if (!file.size || file.size > 12 * 1024 * 1024) {
+          message.dataset.state = "error";
           message.textContent = "Le fichier doit contenir moins de 12 Mo.";
           return;
         }
