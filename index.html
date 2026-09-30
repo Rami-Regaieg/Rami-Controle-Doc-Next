@@ -262,11 +262,13 @@
         );
         const revisionPanel = elements.some(
           (element) =>
-            (/^(tip|success)$/i.test(macro(element)) ||
-              /confluence-information-macro-success|aui-message-success/.test(
+            (/^(tip|success|info|note)$/i.test(macro(element)) ||
+              /confluence-information-macro-(tip|success|info|note)|aui-message-success|status-macro|aui-lozenge/.test(
                 element.className || "",
               ) ||
-              element.getAttribute("data-panel-type") === "success") &&
+              ["success", "tip", "info", "note"].includes(
+                element.getAttribute("data-panel-type") || "",
+              )) &&
             /last (revision|update)/i.test(element.textContent),
         );
 
@@ -290,38 +292,6 @@
             ? "Titre Introduction, Context ou Description détecté."
             : "Ajoutez un titre Introduction, Context ou Description qui présente l'objectif de la page.",
         );
-        const sections = headings.filter(
-          (heading) =>
-            !/^(introduction|context|description|acronyms|abbreviations)$/i.test(
-              heading,
-            ),
-        );
-        const numberedContents = elements.filter(
-          (element) =>
-            hasClass(element, "toc-item-body") &&
-            /^\d+(\.\d+)*$/.test(element.getAttribute("data-outline") || ""),
-        ).length;
-        if (
-          sections.length >= 2 &&
-          !sections.some((heading) => /^\s*\d+[.)]\s+/.test(heading)) &&
-          (!tocFound || numberedContents < 2)
-        ) {
-          add("Chapitres numérotés", "FAIL", "Numérotez les titres des chapitres.");
-        } else if (sections.length < 2) {
-          add(
-            "Chapitres numérotés",
-            "VERIFY",
-            "Trop peu de chapitres pour évaluer la numérotation.",
-          );
-        } else if (numberedContents >= 2) {
-          add(
-            "Chapitres numérotés",
-            "PASS",
-            "Entrées de chapitres numérotées détectées dans le sommaire.",
-          );
-        } else {
-          add("Chapitres numérotés", "PASS", "Titres de chapitres numérotés détectés.");
-        }
         add(
           "Formulation fonctionnelle",
           /\bAs a\b[\s\S]{1,300}\bI want\b[\s\S]{1,300}\bSo that\b/i.test(
@@ -342,42 +312,10 @@
           revisionLabel ? (revisionPanel ? "PASS" : "VERIFY") : "FAIL",
           revisionLabel
             ? revisionPanel
-              ? "Libellé de révision détecté dans un volet de type succès."
+              ? "Libellé de révision détecté dans un volet Confluence reconnu (tip/info/note/succès ou étiquette de statut)."
               : "Libellé de révision détecté ; confirmez le type du volet sur la page source."
-            : "Ajoutez la date de dernière révision dans le volet de type succès prévu.",
+            : "Ajoutez la date de dernière révision dans le volet prévu (généralement de type tip).",
         );
-        const dateMatch = text.match(
-          /\bLast (?:revision|update(?: of this page)?)\s*:\s*([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s*\d{4})/i,
-        );
-        const parsedDate =
-          dateMatch &&
-          new Date(dateMatch[1].replace(/(\d)(st|nd|rd|th)(?=,)/i, "$1"));
-        if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
-          const cutoff = new Date(
-            parsedDate.getFullYear() + 1,
-            parsedDate.getMonth(),
-            parsedDate.getDate(),
-          );
-          const today = new Date();
-          const dateText = `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
-          add(
-            "Révision annuelle",
-            cutoff <
-              new Date(today.getFullYear(), today.getMonth(), today.getDate())
-              ? "FAIL"
-              : "PASS",
-            cutoff <
-              new Date(today.getFullYear(), today.getMonth(), today.getDate())
-              ? `La dernière révision (${dateText}) date de plus d'un an.`
-              : `Dernière révision : ${dateText}.`,
-          );
-        } else {
-          add(
-            "Révision annuelle",
-            "VERIFY",
-            "Date de révision illisible ou absente ; vérifiez-la sur la page source.",
-          );
-        }
         const images = elements.filter(
           (element) =>
             element.tagName === "IMG" ||
@@ -606,7 +544,9 @@
             ) ||
             /confluence-information-macro-(info|note|success|warning|tip)/.test(
               element.className || "",
-            ),
+            ) ||
+            /status-macro|aui-lozenge/.test(element.className || "") ||
+            (hasClass(element, "panel") && element.hasAttribute("style")),
         ).length;
         add(
           "Volets d'information et d'avertissement adaptés",
